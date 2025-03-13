@@ -1,10 +1,11 @@
 # Global LLM configuration
+# 全局LLM配置
 [llm]
-model = "claude-3-5-sonnet"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."
-max_tokens = 4096
-temperature = 0.0
+model = "Qwen/QwQ-32B"  # 使用的LLM模型名称
+base_url = "https://api.siliconflow.cn/v1"  # API基础URL
+api_key = "你的API key"  # API密钥
+max_tokens = 4096  # 最大token数
+temperature = 0.0  # 温度参数，控制生成文本的随机性
 
 # [llm] #AZURE OPENAI:
 # api_type= 'azure'
@@ -16,29 +17,38 @@ temperature = 0.0
 # api_version="AZURE API VERSION" #"2024-08-01-preview"
 
 # Optional configuration for specific LLM models
+# 特定LLM模型的可选配置
 [llm.vision]
-model = "claude-3-5-sonnet"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."
+model = "Qwen/Qwen2-VL-72B-Instruct"  # 视觉模型名称
+base_url = "https://api.siliconflow.cn/v1"  # API基础URL
+api_key = "你的API key"  # API密钥
 
 # Optional configuration for specific browser configuration
+# 浏览器特定配置
 # [browser]
 # Whether to run browser in headless mode (default: false)
+# 是否以无头模式运行浏览器（默认：false）
 #headless = false
 # Disable browser security features (default: true)
+# 禁用浏览器安全功能（默认：true）
 #disable_security = true
 # Extra arguments to pass to the browser
+# 传递给浏览器的额外参数
 #extra_chromium_args = []
 # Path to a Chrome instance to use to connect to your normal browser
+# 用于连接正常浏览器的Chrome实例路径
 # e.g. '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 #chrome_instance_path = ""
 # Connect to a browser instance via WebSocket
+# 通过WebSocket连接浏览器实例
 #wss_url = ""
 # Connect to a browser instance via CDP
+# 通过CDP连接浏览器实例
 #cdp_url = ""
 
 # Optional configuration, Proxy settings for the browser
+# 浏览器代理设置
 # [browser.proxy]
-# server = "http://proxy-server:port"
-# username = "proxy-username"
-# password = "proxy-password"
+# server = "http://proxy-server:port"  # 代理服务器地址
+# username = "proxy-username"  # 代理用户名
+# password = "proxy-password"  # 代理密码

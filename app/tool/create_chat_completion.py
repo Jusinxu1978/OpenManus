@@ -1,18 +1,12 @@
-from typing import Any, List, Optional, Type, Union, get_args, get_origin
-
-from pydantic import BaseModel, Field
-
-from app.tool import BaseTool
-
+from typing import Any, List, Optional, Type, Union, get_args, get_origin  # 导入类型提示相关模块
+from pydantic import BaseModel, Field  # 导入Pydantic数据模型基类和字段配置工具
+from app.tool import BaseTool  # 导入工具基类
 
 class CreateChatCompletion(BaseTool):
-    name: str = "create_chat_completion"
-    description: str = (
-        "Creates a structured completion with specified output formatting."
-    )
+    name: str = "create_chat_completion"  # 工具名称标识符
+    description: str = "Creates a structured completion with specified output formatting."  # 功能描述文本
 
-    # Type mapping for JSON schema
-    type_mapping: dict = {
+    type_mapping: dict = {  # 基础类型到JSON schema类型的映射
         str: "string",
         int: "integer",
         float: "number",
@@ -20,17 +14,17 @@ class CreateChatCompletion(BaseTool):
         dict: "object",
         list: "array",
     }
-    response_type: Optional[Type] = None
-    required: List[str] = Field(default_factory=lambda: ["response"])
+    response_type: Optional[Type] = None  # 响应类型定义（可选）
+    required: List[str] = Field(default_factory=lambda: ["response"])  # 必要字段列表
 
     def __init__(self, response_type: Optional[Type] = str):
-        """Initialize with a specific response type."""
+        """初始化方法：设置响应类型并构建参数schema"""
         super().__init__()
         self.response_type = response_type
-        self.parameters = self._build_parameters()
+        self.parameters = self._build_parameters()  # 根据响应类型构建参数结构
 
     def _build_parameters(self) -> dict:
-        """Build parameters schema based on response type."""
+        """根据响应类型构建JSON schema参数定义"""
         if self.response_type == str:
             return {
                 "type": "object",
@@ -43,9 +37,7 @@ class CreateChatCompletion(BaseTool):
                 "required": self.required,
             }
 
-        if isinstance(self.response_type, type) and issubclass(
-            self.response_type, BaseModel
-        ):
+        if isinstance(self.response_type, type) and issubclass(self.response_type, BaseModel):
             schema = self.response_type.model_json_schema()
             return {
                 "type": "object",
@@ -53,15 +45,14 @@ class CreateChatCompletion(BaseTool):
                 "required": schema.get("required", self.required),
             }
 
-        return self._create_type_schema(self.response_type)
+        return self._create_type_schema(self.response_type)  # 处理复杂类型
 
     def _create_type_schema(self, type_hint: Type) -> dict:
-        """Create a JSON schema for the given type."""
+        """为给定类型生成JSON schema"""
         origin = get_origin(type_hint)
         args = get_args(type_hint)
 
-        # Handle primitive types
-        if origin is None:
+        if origin is None:  # 基础类型处理
             return {
                 "type": "object",
                 "properties": {
@@ -73,8 +64,7 @@ class CreateChatCompletion(BaseTool):
                 "required": self.required,
             }
 
-        # Handle List type
-        if origin is list:
+        if origin is list:  # 列表类型处理
             item_type = args[0] if args else Any
             return {
                 "type": "object",
@@ -87,8 +77,7 @@ class CreateChatCompletion(BaseTool):
                 "required": self.required,
             }
 
-        # Handle Dict type
-        if origin is dict:
+        if origin is dict:  # 字典类型处理
             value_type = args[1] if len(args) > 1 else Any
             return {
                 "type": "object",
@@ -101,14 +90,13 @@ class CreateChatCompletion(BaseTool):
                 "required": self.required,
             }
 
-        # Handle Union type
-        if origin is Union:
+        if origin is Union:  # 联合类型处理
             return self._create_union_schema(args)
 
         return self._build_parameters()
 
     def _get_type_info(self, type_hint: Type) -> dict:
-        """Get type information for a single type."""
+        """获取单个类型的schema信息"""
         if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
             return type_hint.model_json_schema()
 
@@ -118,7 +106,7 @@ class CreateChatCompletion(BaseTool):
         }
 
     def _create_union_schema(self, types: tuple) -> dict:
-        """Create schema for Union types."""
+        """为联合类型生成schema"""
         return {
             "type": "object",
             "properties": {
@@ -128,40 +116,27 @@ class CreateChatCompletion(BaseTool):
         }
 
     async def execute(self, required: list | None = None, **kwargs) -> Any:
-        """Execute the chat completion with type conversion.
-
-        Args:
-            required: List of required field names or None
-            **kwargs: Response data
-
-        Returns:
-            Converted response based on response_type
-        """
+        """执行类型转换的核心方法"""
         required = required or self.required
 
-        # Handle case when required is a list
         if isinstance(required, list) and len(required) > 0:
             if len(required) == 1:
                 required_field = required[0]
                 result = kwargs.get(required_field, "")
             else:
-                # Return multiple fields as a dictionary
                 return {field: kwargs.get(field, "") for field in required}
         else:
             required_field = "response"
             result = kwargs.get(required_field, "")
 
-        # Type conversion logic
         if self.response_type == str:
             return result
 
-        if isinstance(self.response_type, type) and issubclass(
-            self.response_type, BaseModel
-        ):
+        if isinstance(self.response_type, type) and issubclass(self.response_type, BaseModel):
             return self.response_type(**kwargs)
 
         if get_origin(self.response_type) in (list, dict):
-            return result  # Assuming result is already in correct format
+            return result
 
         try:
             return self.response_type(result)

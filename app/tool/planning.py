@@ -4,144 +4,106 @@ from typing import Dict, List, Literal, Optional
 from app.exceptions import ToolError
 from app.tool.base import BaseTool, ToolResult
 
-
 _PLANNING_TOOL_DESCRIPTION = """
 A planning tool that allows the agent to create and manage plans for solving complex tasks.
 The tool provides functionality for creating plans, updating plan steps, and tracking progress.
 """
 
-
 class PlanningTool(BaseTool):
     """
-    A planning tool that allows the agent to create and manage plans for solving complex tasks.
-    The tool provides functionality for creating plans, updating plan steps, and tracking progress.
+    实现计划管理功能的工具类，允许代理创建、更新和跟踪复杂任务的计划
     """
-
-    name: str = "planning"
-    description: str = _PLANNING_TOOL_DESCRIPTION
-    parameters: dict = {
+    name: str = "planning"  # 工具名称标识符
+    description: str = _PLANNING_TOOL_DESCRIPTION  # 工具功能描述
+    parameters: dict = {  # 工具参数定义
         "type": "object",
-        "properties": {
-            "command": {
-                "description": "The command to execute. Available commands: create, update, list, get, set_active, mark_step, delete.",
-                "enum": [
-                    "create",
-                    "update",
-                    "list",
-                    "get",
-                    "set_active",
-                    "mark_step",
-                    "delete",
+        "properties": {  # 参数属性集合
+            "command": {  # 必要参数：操作指令类型
+                "description": "要执行的命令类型，支持创建/更新/列出等操作",
+                "enum": [  # 允许的命令枚举值
+                    "create", "update", "list", "get", "set_active", "mark_step", "delete"
                 ],
-                "type": "string",
+                "type": "string"
             },
-            "plan_id": {
-                "description": "Unique identifier for the plan. Required for create, update, set_active, and delete commands. Optional for get and mark_step (uses active plan if not specified).",
-                "type": "string",
+            "plan_id": {  # 计划唯一标识参数
+                "description": "计划ID，创建/更新等操作时必填",
+                "type": "string"
             },
-            "title": {
-                "description": "Title for the plan. Required for create command, optional for update command.",
-                "type": "string",
+            "title": {  # 计划标题参数
+                "description": "计划标题，创建时必填，更新时可选",
+                "type": "string"
             },
-            "steps": {
-                "description": "List of plan steps. Required for create command, optional for update command.",
+            "steps": {  # 计划步骤参数
+                "description": "步骤列表，创建时必填，更新时可选",
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {"type": "string"}
             },
-            "step_index": {
-                "description": "Index of the step to update (0-based). Required for mark_step command.",
-                "type": "integer",
+            "step_index": {  # 步骤索引参数
+                "description": "步骤索引位置（0开始），标记步骤时必填",
+                "type": "integer"
             },
-            "step_status": {
-                "description": "Status to set for a step. Used with mark_step command.",
+            "step_status": {  # 步骤状态参数
+                "description": "步骤状态值，可选值：not_started/in_progress/completed/blocked",
                 "enum": ["not_started", "in_progress", "completed", "blocked"],
-                "type": "string",
+                "type": "string"
             },
-            "step_notes": {
-                "description": "Additional notes for a step. Optional for mark_step command.",
-                "type": "string",
-            },
+            "step_notes": {  # 步骤备注参数
+                "description": "步骤备注信息，标记步骤时可选",
+                "type": "string"
+            }
         },
-        "required": ["command"],
-        "additionalProperties": False,
+        "required": ["command"],  # 必填参数列表
+        "additionalProperties": False  # 禁用额外属性
     }
 
-    plans: dict = {}  # Dictionary to store plans by plan_id
-    _current_plan_id: Optional[str] = None  # Track the current active plan
+    plans: dict = {}  # 存储所有计划的字典
+    _current_plan_id: Optional[str] = None  # 当前激活的计划ID
 
-    async def execute(
+    async def execute(  # 工具执行入口方法
         self,
         *,
-        command: Literal[
+        command: Literal[  # 操作指令类型
             "create", "update", "list", "get", "set_active", "mark_step", "delete"
         ],
         plan_id: Optional[str] = None,
         title: Optional[str] = None,
         steps: Optional[List[str]] = None,
         step_index: Optional[int] = None,
-        step_status: Optional[
-            Literal["not_started", "in_progress", "completed", "blocked"]
-        ] = None,
+        step_status: Optional[Literal["not_started", "in_progress", "completed", "blocked"]] = None,
         step_notes: Optional[str] = None,
         **kwargs,
     ):
-        """
-        Execute the planning tool with the given command and parameters.
-
-        Parameters:
-        - command: The operation to perform
-        - plan_id: Unique identifier for the plan
-        - title: Title for the plan (used with create command)
-        - steps: List of steps for the plan (used with create command)
-        - step_index: Index of the step to update (used with mark_step command)
-        - step_status: Status to set for a step (used with mark_step command)
-        - step_notes: Additional notes for a step (used with mark_step command)
-        """
-
-        if command == "create":
+        """执行具体操作的分发方法"""
+        if command == "create":  # 创建新计划
             return self._create_plan(plan_id, title, steps)
-        elif command == "update":
+        elif command == "update":  # 更新现有计划
             return self._update_plan(plan_id, title, steps)
-        elif command == "list":
+        elif command == "list":  # 列出所有计划
             return self._list_plans()
-        elif command == "get":
+        elif command == "get":  # 获取指定计划详情
             return self._get_plan(plan_id)
-        elif command == "set_active":
+        elif command == "set_active":  # 设置当前激活计划
             return self._set_active_plan(plan_id)
-        elif command == "mark_step":
+        elif command == "mark_step":  # 标记步骤状态
             return self._mark_step(plan_id, step_index, step_status, step_notes)
-        elif command == "delete":
+        elif command == "delete":  # 删除计划
             return self._delete_plan(plan_id)
-        else:
-            raise ToolError(
-                f"Unrecognized command: {command}. Allowed commands are: create, update, list, get, set_active, mark_step, delete"
-            )
+        else:  # 无效指令处理
+            raise ToolError(f"不支持的指令：{command}")
 
-    def _create_plan(
+    def _create_plan(  # 创建新计划的私有方法
         self, plan_id: Optional[str], title: Optional[str], steps: Optional[List[str]]
     ) -> ToolResult:
-        """Create a new plan with the given ID, title, and steps."""
-        if not plan_id:
-            raise ToolError("Parameter `plan_id` is required for command: create")
-
-        if plan_id in self.plans:
-            raise ToolError(
-                f"A plan with ID '{plan_id}' already exists. Use 'update' to modify existing plans."
-            )
-
-        if not title:
-            raise ToolError("Parameter `title` is required for command: create")
-
-        if (
-            not steps
-            or not isinstance(steps, list)
-            or not all(isinstance(step, str) for step in steps)
-        ):
-            raise ToolError(
-                "Parameter `steps` must be a non-empty list of strings for command: create"
-            )
-
-        # Create a new plan with initialized step statuses
+        """创建新计划的核心实现"""
+        if not plan_id:  # 检查必要参数
+            raise ToolError("创建计划时必须指定plan_id")
+        if plan_id in self.plans:  # 检查ID是否重复
+            raise ToolError(f"ID为{plan_id}的计划已存在")
+        if not title:  # 标题参数校验
+            raise ToolError("必须提供计划标题")
+        if not steps or not isinstance(steps, list) or not all(isinstance(s, str) for s in steps):
+            raise ToolError("步骤必须为非空字符串列表")
+        # 初始化步骤状态和备注
         plan = {
             "plan_id": plan_id,
             "title": title,
@@ -149,215 +111,124 @@ class PlanningTool(BaseTool):
             "step_statuses": ["not_started"] * len(steps),
             "step_notes": [""] * len(steps),
         }
+        self.plans[plan_id] = plan  # 存储新计划
+        self._current_plan_id = plan_id  # 设置为当前激活计划
+        return ToolResult(output=f"计划创建成功：{plan_id}\n\n{self._format_plan(plan)}")
 
-        self.plans[plan_id] = plan
-        self._current_plan_id = plan_id  # Set as active plan
-
-        return ToolResult(
-            output=f"Plan created successfully with ID: {plan_id}\n\n{self._format_plan(plan)}"
-        )
-
-    def _update_plan(
+    def _update_plan(  # 更新计划的私有方法
         self, plan_id: Optional[str], title: Optional[str], steps: Optional[List[str]]
     ) -> ToolResult:
-        """Update an existing plan with new title or steps."""
-        if not plan_id:
-            raise ToolError("Parameter `plan_id` is required for command: update")
-
-        if plan_id not in self.plans:
-            raise ToolError(f"No plan found with ID: {plan_id}")
-
+        """更新现有计划的核心实现"""
+        if not plan_id:  # 参数校验
+            raise ToolError("更新计划时必须指定plan_id")
+        if plan_id not in self.plans:  # 检查是否存在
+            raise ToolError(f"未找到ID为{plan_id}的计划")
         plan = self.plans[plan_id]
-
-        if title:
+        if title:  # 更新标题
             plan["title"] = title
-
-        if steps:
-            if not isinstance(steps, list) or not all(
-                isinstance(step, str) for step in steps
-            ):
-                raise ToolError(
-                    "Parameter `steps` must be a list of strings for command: update"
-                )
-
-            # Preserve existing step statuses for unchanged steps
+        if steps:  # 更新步骤时保留原有状态
+            if not isinstance(steps, list) or not all(isinstance(s, str) for s in steps):
+                raise ToolError("步骤必须为字符串列表")
             old_steps = plan["steps"]
             old_statuses = plan["step_statuses"]
             old_notes = plan["step_notes"]
-
-            # Create new step statuses and notes
             new_statuses = []
             new_notes = []
-
             for i, step in enumerate(steps):
-                # If the step exists at the same position in old steps, preserve status and notes
                 if i < len(old_steps) and step == old_steps[i]:
                     new_statuses.append(old_statuses[i])
                     new_notes.append(old_notes[i])
                 else:
                     new_statuses.append("not_started")
                     new_notes.append("")
-
             plan["steps"] = steps
             plan["step_statuses"] = new_statuses
             plan["step_notes"] = new_notes
+        return ToolResult(output=f"计划更新成功：{plan_id}\n\n{self._format_plan(plan)}")
 
-        return ToolResult(
-            output=f"Plan updated successfully: {plan_id}\n\n{self._format_plan(plan)}"
-        )
-
-    def _list_plans(self) -> ToolResult:
-        """List all available plans."""
-        if not self.plans:
-            return ToolResult(
-                output="No plans available. Create a plan with the 'create' command."
-            )
-
-        output = "Available plans:\n"
-        for plan_id, plan in self.plans.items():
-            current_marker = " (active)" if plan_id == self._current_plan_id else ""
-            completed = sum(
-                1 for status in plan["step_statuses"] if status == "completed"
-            )
-            total = len(plan["steps"])
-            progress = f"{completed}/{total} steps completed"
-            output += f"• {plan_id}{current_marker}: {plan['title']} - {progress}\n"
-
+    def _list_plans(self) -> ToolResult:  # 列出所有计划
+        """获取所有计划的概要信息"""
+        if not self.plans:  # 空处理
+            return ToolResult(output="暂无任何计划，请使用create指令创建")
+        output = "可用计划列表：\n"
+        for pid, p in self.plans.items():
+            current = " (当前)" if pid == self._current_plan_id else ""
+            completed = sum(1 for s in p["step_statuses"] if s == "completed")
+            output += f"• {pid}{current}: {p['title']} - {completed}/{len(p['steps'])}步骤完成\n"
         return ToolResult(output=output)
 
-    def _get_plan(self, plan_id: Optional[str]) -> ToolResult:
-        """Get details of a specific plan."""
-        if not plan_id:
-            # If no plan_id is provided, use the current active plan
-            if not self._current_plan_id:
-                raise ToolError(
-                    "No active plan. Please specify a plan_id or set an active plan."
-                )
-            plan_id = self._current_plan_id
-
+    def _get_plan(self, plan_id: Optional[str]) -> ToolResult:  # 获取计划详情
+        """获取指定计划的详细信息"""
+        if not plan_id and not self._current_plan_id:  # 参数处理
+            raise ToolError("未指定计划ID且没有当前激活计划")
+        plan_id = plan_id or self._current_plan_id
         if plan_id not in self.plans:
-            raise ToolError(f"No plan found with ID: {plan_id}")
+            raise ToolError(f"未找到ID为{plan_id}的计划")
+        return ToolResult(output=self._format_plan(self.plans[plan_id]))
 
-        plan = self.plans[plan_id]
-        return ToolResult(output=self._format_plan(plan))
-
-    def _set_active_plan(self, plan_id: Optional[str]) -> ToolResult:
-        """Set a plan as the active plan."""
+    def _set_active_plan(self, plan_id: Optional[str]) -> ToolResult:  # 设置当前计划
+        """设置当前激活的计划"""
         if not plan_id:
-            raise ToolError("Parameter `plan_id` is required for command: set_active")
-
+            raise ToolError("必须指定要激活的plan_id")
         if plan_id not in self.plans:
-            raise ToolError(f"No plan found with ID: {plan_id}")
-
+            raise ToolError(f"未找到ID为{plan_id}的计划")
         self._current_plan_id = plan_id
-        return ToolResult(
-            output=f"Plan '{plan_id}' is now the active plan.\n\n{self._format_plan(self.plans[plan_id])}"
-        )
+        return ToolResult(output=f"已激活计划：{plan_id}\n\n{self._format_plan(self.plans[plan_id])}")
 
-    def _mark_step(
+    def _mark_step(  # 标记步骤状态
         self,
         plan_id: Optional[str],
         step_index: Optional[int],
         step_status: Optional[str],
         step_notes: Optional[str],
     ) -> ToolResult:
-        """Mark a step with a specific status and optional notes."""
+        """标记指定步骤的状态和备注"""
+        plan_id = plan_id or self._current_plan_id  # 使用当前计划
         if not plan_id:
-            # If no plan_id is provided, use the current active plan
-            if not self._current_plan_id:
-                raise ToolError(
-                    "No active plan. Please specify a plan_id or set an active plan."
-                )
-            plan_id = self._current_plan_id
-
+            raise ToolError("未指定计划ID且没有当前激活计划")
         if plan_id not in self.plans:
-            raise ToolError(f"No plan found with ID: {plan_id}")
-
+            raise ToolError(f"未找到ID为{plan_id}的计划")
         if step_index is None:
-            raise ToolError("Parameter `step_index` is required for command: mark_step")
-
+            raise ToolError("必须指定步骤索引")
         plan = self.plans[plan_id]
-
         if step_index < 0 or step_index >= len(plan["steps"]):
-            raise ToolError(
-                f"Invalid step_index: {step_index}. Valid indices range from 0 to {len(plan['steps'])-1}."
-            )
-
-        if step_status and step_status not in [
-            "not_started",
-            "in_progress",
-            "completed",
-            "blocked",
-        ]:
-            raise ToolError(
-                f"Invalid step_status: {step_status}. Valid statuses are: not_started, in_progress, completed, blocked"
-            )
-
+            raise ToolError(f"步骤索引{step_index}超出范围")
+        if step_status and step_status not in ["not_started", "in_progress", "completed", "blocked"]:
+            raise ToolError("无效的状态值")
         if step_status:
             plan["step_statuses"][step_index] = step_status
-
         if step_notes:
             plan["step_notes"][step_index] = step_notes
+        return ToolResult(output=f"步骤{step_index}已更新\n\n{self._format_plan(plan)}")
 
-        return ToolResult(
-            output=f"Step {step_index} updated in plan '{plan_id}'.\n\n{self._format_plan(plan)}"
-        )
-
-    def _delete_plan(self, plan_id: Optional[str]) -> ToolResult:
-        """Delete a plan."""
+    def _delete_plan(self, plan_id: Optional[str]) -> ToolResult:  # 删除计划
+        """删除指定计划"""
         if not plan_id:
-            raise ToolError("Parameter `plan_id` is required for command: delete")
-
+            raise ToolError("必须指定要删除的plan_id")
         if plan_id not in self.plans:
-            raise ToolError(f"No plan found with ID: {plan_id}")
-
+            raise ToolError(f"未找到ID为{plan_id}的计划")
         del self.plans[plan_id]
-
-        # If the deleted plan was the active plan, clear the active plan
         if self._current_plan_id == plan_id:
             self._current_plan_id = None
+        return ToolResult(output=f"已删除计划：{plan_id}")
 
-        return ToolResult(output=f"Plan '{plan_id}' has been deleted.")
-
-    def _format_plan(self, plan: Dict) -> str:
-        """Format a plan for display."""
-        output = f"Plan: {plan['title']} (ID: {plan['plan_id']})\n"
+    def _format_plan(self, plan: Dict) -> str:  # 格式化输出计划信息
+        """将计划数据格式化为可读字符串"""
+        output = f"计划：{plan['title']} (ID：{plan['plan_id']})\n"
         output += "=" * len(output) + "\n\n"
-
-        # Calculate progress statistics
-        total_steps = len(plan["steps"])
-        completed = sum(1 for status in plan["step_statuses"] if status == "completed")
-        in_progress = sum(
-            1 for status in plan["step_statuses"] if status == "in_progress"
-        )
-        blocked = sum(1 for status in plan["step_statuses"] if status == "blocked")
-        not_started = sum(
-            1 for status in plan["step_statuses"] if status == "not_started"
-        )
-
-        output += f"Progress: {completed}/{total_steps} steps completed "
-        if total_steps > 0:
-            percentage = (completed / total_steps) * 100
-            output += f"({percentage:.1f}%)\n"
-        else:
-            output += "(0%)\n"
-
-        output += f"Status: {completed} completed, {in_progress} in progress, {blocked} blocked, {not_started} not started\n\n"
-        output += "Steps:\n"
-
-        # Add each step with its status and notes
-        for i, (step, status, notes) in enumerate(
-            zip(plan["steps"], plan["step_statuses"], plan["step_notes"])
-        ):
-            status_symbol = {
-                "not_started": "[ ]",
-                "in_progress": "[→]",
-                "completed": "[✓]",
-                "blocked": "[!]",
-            }.get(status, "[ ]")
-
-            output += f"{i}. {status_symbol} {step}\n"
-            if notes:
-                output += f"   Notes: {notes}\n"
-
+        total = len(plan["steps"])
+        completed = sum(s == "completed" for s in plan["step_statuses"])
+        output += f"进度：{completed}/{total} ({(completed/total*100):.1f}%)\n"
+        output += f"状态：完成{completed}个，进行中{plan['step_statuses'].count('in_progress')}个，阻塞{plan['step_statuses'].count('blocked')}个，未开始{plan['step_statuses'].count('not_started')}个\n\n"
+        output += "步骤详情：\n"
+        for i, (step, status, note) in enumerate(zip(plan["steps"], plan["step_statuses"], plan["step_notes"])):
+            status_sym = {
+                "not_started": "□",
+                "in_progress": "▶",
+                "completed": "✓",
+                "blocked": "‼"
+            }.get(status, "□")
+            output += f"{i}. {status_sym} {step}\n"
+            if note:
+                output += f"   备注：{note}\n"
         return output

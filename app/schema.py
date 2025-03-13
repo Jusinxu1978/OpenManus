@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum  # Import the Enum class for defining enumerations
 from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field

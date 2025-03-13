@@ -1,46 +1,48 @@
-import json
+# 导入必要的模块
+import json  # JSON处理
 
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, List, Literal, Optional, Union  # 类型注解
 
-from pydantic import Field
+from pydantic import Field  # 数据验证和设置管理
 
-from app.agent.react import ReActAgent
-from app.logger import logger
-from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.schema import AgentState, Message, ToolCall, TOOL_CHOICE_TYPE, ToolChoice
-from app.tool import CreateChatCompletion, Terminate, ToolCollection
+# 导入自定义模块
+from app.agent.react import ReActAgent  # ReAct代理基类
+from app.logger import logger  # 日志记录器
+from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT  # 提示模板
+from app.schema import AgentState, Message, ToolCall, TOOL_CHOICE_TYPE, ToolChoice  # 数据模型
+from app.tool import CreateChatCompletion, Terminate, ToolCollection  # 工具集合
 
 
-TOOL_CALL_REQUIRED = "Tool calls required but none provided"
+TOOL_CALL_REQUIRED = "Tool calls required but none provided"  # 工具调用错误信息
 
 
 class ToolCallAgent(ReActAgent):
-    """Base agent class for handling tool/function calls with enhanced abstraction"""
+    """处理工具/函数调用的基础代理类，具有增强的抽象能力"""
 
-    name: str = "toolcall"
-    description: str = "an agent that can execute tool calls."
+    name: str = "toolcall"  # 代理名称
+    description: str = "一个可以执行工具调用的代理。"  # 代理描述
 
-    system_prompt: str = SYSTEM_PROMPT
-    next_step_prompt: str = NEXT_STEP_PROMPT
+    system_prompt: str = SYSTEM_PROMPT  # 系统提示模板
+    next_step_prompt: str = NEXT_STEP_PROMPT  # 下一步提示模板
 
     available_tools: ToolCollection = ToolCollection(
-        CreateChatCompletion(), Terminate()
+        CreateChatCompletion(), Terminate()  # 可用工具集合
     )
-    tool_choices: TOOL_CHOICE_TYPE = ToolChoice.AUTO # type: ignore
-    special_tool_names: List[str] = Field(default_factory=lambda: [Terminate().name])
+    tool_choices: TOOL_CHOICE_TYPE = ToolChoice.AUTO # type: ignore  # 工具选择模式
+    special_tool_names: List[str] = Field(default_factory=lambda: [Terminate().name])  # 特殊工具名称列表
 
-    tool_calls: List[ToolCall] = Field(default_factory=list)
+    tool_calls: List[ToolCall] = Field(default_factory=list)  # 工具调用列表
 
-    max_steps: int = 30
-    max_observe: Optional[Union[int, bool]] = None
+    max_steps: int = 30  # 最大步骤数
+    max_observe: Optional[Union[int, bool]] = None  # 最大观察长度
 
     async def think(self) -> bool:
-        """Process current state and decide next actions using tools"""
+        """处理当前状态并使用工具决定下一步操作"""
         if self.next_step_prompt:
             user_msg = Message.user_message(self.next_step_prompt)
             self.messages += [user_msg]
 
-        # Get response with tool options
+        # 获取带有工具选项的响应
         response = await self.llm.ask_tool(
             messages=self.messages,
             system_msgs=[Message.system_message(self.system_prompt)]
@@ -51,7 +53,7 @@ class ToolCallAgent(ReActAgent):
         )
         self.tool_calls = response.tool_calls
 
-        # Log response info
+        # 记录响应信息
         logger.info(f"✨ {self.name}'s thoughts: {response.content}")
         logger.info(
             f"🛠️ {self.name} selected {len(response.tool_calls) if response.tool_calls else 0} tools to use"
@@ -62,7 +64,7 @@ class ToolCallAgent(ReActAgent):
             )
 
         try:
-            # Handle different tool_choices modes
+            # 处理不同的工具选择模式
             if self.tool_choices == ToolChoice.NONE:
                 if response.tool_calls:
                     logger.warning(
@@ -73,7 +75,7 @@ class ToolCallAgent(ReActAgent):
                     return True
                 return False
 
-            # Create and add assistant message
+            # 创建并添加助手消息
             assistant_msg = (
                 Message.from_tool_calls(
                     content=response.content, tool_calls=self.tool_calls
@@ -84,9 +86,9 @@ class ToolCallAgent(ReActAgent):
             self.memory.add_message(assistant_msg)
 
             if self.tool_choices == ToolChoice.REQUIRED and not self.tool_calls:
-                return True  # Will be handled in act()
+                return True  # 将在act()中处理
 
-            # For 'auto' mode, continue with content if no commands but content exists
+            # 对于'auto'模式，如果没有命令但有内容，则继续处理内容
             if self.tool_choices == ToolChoice.AUTO and not self.tool_calls:
                 return bool(response.content)
 
@@ -101,12 +103,12 @@ class ToolCallAgent(ReActAgent):
             return False
 
     async def act(self) -> str:
-        """Execute tool calls and handle their results"""
+        """执行工具调用并处理其结果"""
         if not self.tool_calls:
             if self.tool_choices == ToolChoice.REQUIRED:
                 raise ValueError(TOOL_CALL_REQUIRED)
 
-            # Return last message content if no tool calls
+            # 如果没有工具调用，返回最后一条消息的内容
             return self.messages[-1].content or "No content or commands to execute"
 
         results = []
@@ -120,7 +122,7 @@ class ToolCallAgent(ReActAgent):
                 f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
             )
 
-            # Add tool response to memory
+            # 将工具响应添加到内存
             tool_msg = Message.tool_message(
                 content=result, tool_call_id=command.id, name=command.function.name
             )
@@ -130,7 +132,7 @@ class ToolCallAgent(ReActAgent):
         return "\n\n".join(results)
 
     async def execute_tool(self, command: ToolCall) -> str:
-        """Execute a single tool call with robust error handling"""
+        """执行单个工具调用，具有健壮的错误处理"""
         if not command or not command.function or not command.function.name:
             return "Error: Invalid command format"
 
@@ -139,21 +141,21 @@ class ToolCallAgent(ReActAgent):
             return f"Error: Unknown tool '{name}'"
 
         try:
-            # Parse arguments
+            # 解析参数
             args = json.loads(command.function.arguments or "{}")
 
-            # Execute the tool
+            # 执行工具
             logger.info(f"🔧 Activating tool: '{name}'...")
             result = await self.available_tools.execute(name=name, tool_input=args)
 
-            # Format result for display
+            # 格式化结果以便显示
             observation = (
                 f"Observed output of cmd `{name}` executed:\n{str(result)}"
                 if result
                 else f"Cmd `{name}` completed with no output"
             )
 
-            # Handle special tools like `finish`
+            # 处理特殊工具如`finish`
             await self._handle_special_tool(name=name, result=result)
 
             return observation
@@ -169,20 +171,20 @@ class ToolCallAgent(ReActAgent):
             return f"Error: {error_msg}"
 
     async def _handle_special_tool(self, name: str, result: Any, **kwargs):
-        """Handle special tool execution and state changes"""
+        """处理特殊工具执行和状态变更"""
         if not self._is_special_tool(name):
             return
 
         if self._should_finish_execution(name=name, result=result, **kwargs):
-            # Set agent state to finished
+            # 将代理状态设置为完成
             logger.info(f"🏁 Special tool '{name}' has completed the task!")
             self.state = AgentState.FINISHED
 
     @staticmethod
     def _should_finish_execution(**kwargs) -> bool:
-        """Determine if tool execution should finish the agent"""
+        """判断工具执行是否应该结束代理"""
         return True
 
     def _is_special_tool(self, name: str) -> bool:
-        """Check if tool name is in special tools list"""
+        """检查工具名称是否在特殊工具列表中"""
         return name.lower() in [n.lower() for n in self.special_tool_names]

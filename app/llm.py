@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union  # Import type annotations for type hinting
 
 from openai import (
     APIError,
